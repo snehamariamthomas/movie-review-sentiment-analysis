@@ -1,0 +1,230 @@
+---
+title: "Sentiment Analysis of Movie Reviews"  
+
+author: "Sneha Mariam Thomas"
+
+output:
+  html_document
+---
+```{r ref.label=knitr::all_labels(), echo=FALSE, eval=FALSE} 
+# this chunk generates the complete code appendix. 
+# eval=FALSE tells R not to run (``evaluate'') the code here (it was already run before).
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, cache = TRUE, fig.align="center")
+```
+&nbsp;
+
+#### __Introduction__  
+
+In the age of digital media, the abundance of user-generated content on platforms like IMDb and Rotten Tomatoes offers a treasure trove of insights for movie enthusiasts, filmmakers, and marketers. Sentiment analysis, the process of computationally determining the emotional tone behind a body of text, plays a crucial role in extracting these insights from movie reviews. By classifying reviews as positive or negative, sentiment analysis helps in understanding public opinion, predicting box office success, and enhancing recommendation systems.  
+
+Understanding audience reception is vital for filmmakers and studios, as it allows them to gauge how well a movie is received based on the sentiment of reviews. Positive sentiments may indicate a well-received film, while negative sentiments could highlight aspects that need improvement. Sentiment analysis also serves as a predictive tool for box office performance, as movies with overwhelmingly positive sentiment in reviews are likely to attract more viewers. Furthermore, streaming platforms and online retailers use sentiment analysis to refine their recommendation algorithms, suggesting movies that are more likely to be enjoyed by the user based on their viewing history and review sentiment. Additionally, sentiment analysis provides valuable data for market research, helping stakeholders understand trends, audience preferences, and competitive positioning.  
+
+Film studios and producers can use sentiment analysis to make data-driven decisions about marketing strategies, sequels, and future projects. Understanding the audience's sentiment can help in tailoring promotional campaigns to address concerns or highlight strengths. Streaming services like Netflix and Amazon Prime can enhance their recommendation engines by incorporating sentiment analysis. By suggesting movies with positive sentiments similar to those previously enjoyed by the user, they can improve user satisfaction and engagement. Websites that aggregate movie reviews, such as Rotten Tomatoes, can use sentiment analysis to provide more nuanced ratings. Instead of relying solely on binary positive/negative reviews, they can offer insights into specific aspects of the movie that were praised or criticized. Brands and advertisers can leverage sentiment analysis to understand consumer behavior and preferences, informing their decisions on where to place ads, what type of content to sponsor, and how to engage with their target audience effectively.  
+
+This project employs sophisticated text classification techniques to analyze a dataset of movie reviews, with the objective of classifying sentiment as either positive or negative. By evaluating the performance of various models, including Naive Bayes and ridge regression classifiers, the aim is to identify the most effective approach for this sentiment classification task. This analysis highlights the practical applications of sentiment analysis in the context of movie reviews and underscores its broader benefits for understanding audience reception and enhancing decision-making processes in the film industry.  
+
+&nbsp;
+
+#### __Data Source__  
+The dataset used in this project comprises 2,000 movie reviews, as presented by Pang and Lee in their 2004 study. This movie review corpus includes an attribute called 'sentiment,' which labels each review as either 'pos' (positive) or 'neg' (negative). These sentiment labels are based on the original star ratings assigned in archived newspaper reviews sourced from IMDb.com. The dataset is well-regarded for its balanced distribution of positive and negative reviews, making it an excellent benchmark for evaluating sentiment analysis techniques. Each review provides rich textual data that captures various expressions of sentiment, ranging from enthusiastic endorsements to critical disapprovals. This attribute of sentiment allows for the assessment of text classification models in their ability to accurately predict the underlying sentiment conveyed in movie reviews, thus providing a robust framework for testing and validating sentiment analysis methodologies.  
+
+&nbsp;
+
+#### __Data Processing__  
+A custom stopwords list was created to enhance sentiment analysis on movie reviews. Stopwords carrying significant meaning in movie context were retained, including negations and intensifiers, ensuring crucial sentiment-related nuances were preserved for accurate analysis.
+
+&nbsp;
+
+#### __Modelling Strategies__  
+
+In this analysis, the positive class represents negative reviews because it highlights the importance of correctly identifying negative sentiments, which are often more nuanced and impactful. Accurately classifying negative reviews is crucial for understanding critical feedback and addressing potential issues, making the model's performance in this area particularly significant for improving user experience and guiding decision-making.  
+
+&nbsp;
+
+__1. Naive Bayes Classifier__  
+
+- Initially, a Naive Bayes classifier was implemented to analyze the sentiment of the movie reviews dataset, using unigrams as the feature set. This choice was driven by the simplicity and effectiveness of the Naive Bayes algorithm for text classification tasks. Unigrams, or single-word features, were employed to establish a baseline model due to their straightforward interpretation and ease of implementation.  
+
+- The performance of the Naive Bayes classifier was evaluated using several metrics to gauge its effectiveness in distinguishing between positive and negative reviews:  
+
+```{r, echo = FALSE, warning=FALSE,message=FALSE}
+library("quanteda", quietly = TRUE, warn.conflicts = FALSE, verbose = FALSE)
+library("quanteda.textmodels")
+library(caret)
+library(quanteda.textplots)
+library(kableExtra)
+library(glmnet)
+require(doMC)
+library(knitr)
+library(kableExtra)
+
+
+
+# Load the dataset
+data(data_corpus_moviereviews)
+
+review_corpus <- corpus(data_corpus_moviereviews)
+review_tokens <- tokens(review_corpus, remove_punct = TRUE, remove_url = TRUE, remove_numbers = TRUE,remove_symbols = TRUE)
+
+# Custom stopwords list
+words_to_keep <- c("isn't", "aren't", "wasn't", "weren't", "hasn't","haven't", "hadn't", "doesn't", "don't", "didn't", "won't", "wouldn't", "shan't", "shouldn't", "can't", "cannot", "couldn't", "mustn't", "nor","very")
+english_stopwords <- stopwords("en")
+custom_stopwords <- setdiff(english_stopwords, words_to_keep)
+review_tokens <- tokens_remove(review_tokens, custom_stopwords)
+
+review_tokens <- tokens_wordstem(review_tokens)
+review_dfm <- dfm(review_tokens, tolower = TRUE)
+
+# Split the data into training and testing sets
+set.seed(123)
+train_index <- sample(1:nrow(review_dfm), 0.8 * nrow(review_dfm))
+train_dfm <- review_dfm[train_index, ]
+test_dfm <- review_dfm[-train_index, ]
+train_labels <- data_corpus_moviereviews$sentiment[train_index]
+test_labels <- data_corpus_moviereviews$sentiment[-train_index]
+
+# Naive Bayes classifier:Unigram
+set.seed(123)
+nb_classifier <- textmodel_nb(train_dfm, y = train_labels)
+predictions <- predict(nb_classifier, newdata = test_dfm)
+
+conf_matrix <- confusionMatrix(predictions, test_labels)
+accuracy <- (conf_matrix$overall["Accuracy"])
+precision <- (conf_matrix$byClass["Pos Pred Value"])
+recall <- (conf_matrix$byClass["Sensitivity"])
+f1_score <- (2*precision*recall)/sum(precision,recall)
+neg_pred <- (conf_matrix$byClass["Neg Pred Value"])
+
+
+#Evaluation Metrics: Visualisation
+metric_names <- c("Accuracy", "Precision", "Recall", "F1 Score","Negative Predictive Value")
+metric_values <- c(accuracy, precision, recall, f1_score,neg_pred)
+metrics_df <- data.frame(Metric = metric_names,Value = metric_values)
+rownames(metrics_df) <- NULL
+
+nb_uni_perf <- kable(metrics_df, format = "html") %>%
+  kable_styling(full_width = FALSE,
+                latex_options = "striped", # Add lines for rows and columns
+                bootstrap_options = c("striped", "hover", "condensed", "responsive"), # Bootstrap styling options
+                font_size = 14) %>%
+  add_footnote("Positive Class-0 (Negative Review)",notation="none")
+
+nb_uni_perf
+```
+
+- The accuracy metric, indicating that approximately 79.5% of the reviews were accurately classified, demonstrates the overall effectiveness of the model in discerning between positive and negative reviews. Delving into precision, it reveals that around 78.39% of reviews identified as negative were indeed negative reviews.Moreover, the recall (sensitivity) score, illustrating that approximately 80% of actual negative reviews were correctly classified as such, signifies the model's adeptness in capturing the majority of negative reviews instances within the dataset.The F1 Score of 0.7919 further solidifies the classifier's performance by demonstrating balance between precision and recall for negative reviews, indicative of its ability to maintain a low rate of both false positive and false negative predictions.Finally,the negative predictive value indicates that approximately 80.60% of the reviews predicted as positve were indeed positive reviews.  
+
+- Identifying the most important features for classification involves analyzing the conditional probabilities of words associated with each sentiment class. This process helps determine which terms are most indicative of negative and positive reviews, providing valuable insights into the key linguistic markers for sentiment. Understanding these prominent features aids in refining the model by focusing on the most influential words, thereby enhancing the accuracy and interpretability of sentiment analysis. Following are the markers for each sentiment class:    
+
+```{r, echo = FALSE, warning=FALSE,message=FALSE}
+## FEATURES MOST IMPORTANT FOR CLASSIFICATION 
+
+#Retrieves the conditional probabilities
+nb_cond_probs <- coef(nb_classifier)
+
+# Extract the conditional probabilities for the "neg" and "pos"classes
+neg_probs <- nb_cond_probs[, "neg"]
+pos_probs <- nb_cond_probs[, "pos"]
+
+# Measure of the relative evidence for each class given that word
+prob_diff <- neg_probs - pos_probs
+#Words associated with negative class
+top_neg_features <- names(sort(prob_diff, decreasing = TRUE)[1:20])
+top_pos_features <- names(sort(prob_diff)[1:20])
+
+features_df <- data.frame(
+  `Positive Review Markers` = paste(top_pos_features, collapse = ", "),
+  `Negative Review Markers` = paste(top_neg_features, collapse = ", ")
+)
+
+
+kable(features_df, format = "html", col.names = c("Positive Review Markers", "Negative Review Markers")) %>%
+  kable_styling(full_width = FALSE, 
+                latex_options = "striped", 
+                bootstrap_options = c("striped", "hover", "condensed", "responsive"), 
+                font_size = 14)%>%column_spec(c(1:2), border_left = TRUE, border_right = TRUE)
+```
+
+&nbsp;
+
+__2. Enhancing Sentiment Classification: Advanced Techniques and Model Evaluation__  
+To enhance classification performance, various advanced techniques were applied beyond the initial unigram Naive Bayes classifier. Initially, the approach was expanded to bigrams, with a preprocessing step that filtered out infrequent terms by ensuring each word appeared in at least two documents. This adjustment reduced noise from rare words and led to notable improvements in accuracy, recall, and precision. Following this, the analysis further progressed to trigrams, incorporating sequences of up to three words to capture more intricate contextual information. The trigram Naive Bayes model demonstrated substantial gains over bigrams and unigrams, reflecting its ability to better understand the nuances of sentiment.
+
+In addition to exploring n-grams, regularization techniques were introduced. Regularization adds penalty terms to the model's cost function, discouraging excessive complexity and overfitting by penalizing overly complex models. This adjustment aimed to enhance the model’s generalization capability by mitigating the risk of fitting noise in the training data. 
+
+Among the models evaluated, ridge regression applied to trigrams emerged as the most effective. This model outperformed others in terms of accuracy, recall, precision, and other performance metrics. The ridge regression model's ability to leverage trigrams while managing complexity through regularization provided a more robust and accurate classification, demonstrating the effectiveness of these advanced techniques.  
+
+```{r, echo = FALSE, warning=FALSE,message=FALSE}
+
+#TRIGRAMS
+review_corpus <- corpus(data_corpus_moviereviews)
+review_tokens <- tokens(review_corpus, remove_punct = TRUE, remove_url = TRUE,remove_numbers = TRUE,remove_symbols = TRUE)
+review_tokens_tri <- tokens_remove(review_tokens, custom_stopwords)
+review_tokens_tri <- tokens_wordstem(review_tokens_tri)
+review_tokens_tri <- tokens_ngrams(review_tokens_tri, n = 1:3)
+review_dfm_t <- dfm(review_tokens_tri, tolower = TRUE)
+review_dfm_t <- dfm_trim(review_dfm_t, min_docfreq = 2)
+
+#RIDGE
+rid_dfm <- review_dfm_t
+set.seed(123)
+#Based on training index generated above ensure test applied on same train and test sets
+train_rid_dfm <- rid_dfm[train_index, ]
+test_rid_dfm <- rid_dfm[-train_index, ]
+train_rid_labels <- data_corpus_moviereviews$sentiment[train_index]
+test_rid_labels <- data_corpus_moviereviews$sentiment[-train_index]
+
+registerDoMC(cores=3) 
+set.seed(123)
+ridge <- cv.glmnet(train_rid_dfm,train_rid_labels,family="binomial", alpha=0, nfolds=5, parallel=TRUE, intercept=TRUE,type.measure="class")
+#Selecting lambda 1se for parsimony
+best.lambda <- which(ridge$lambda==ridge$lambda.1se)
+preds_ridge <- predict(ridge, test_rid_dfm, type="class",lambda=best.lambda)
+preds_ridge_factor <- factor(preds_ridge, levels = levels(test_rid_labels))
+conf_matrix_ridge <- confusionMatrix(preds_ridge_factor, test_rid_labels)
+
+#MODEL EVALUATION
+accuracy <- (conf_matrix_ridge$overall["Accuracy"])
+precision <- (conf_matrix_ridge$byClass["Pos Pred Value"])
+recall <- (conf_matrix_ridge$byClass["Sensitivity"])
+f1_score <- (2*precision*recall)/sum(precision,recall)
+neg_pred <- (conf_matrix_ridge$byClass["Neg Pred Value"])
+
+
+#Evaluation Metrics: Visualisation
+metric_names <- c("Accuracy", "Precision", "Recall", "F1 Score","Negative Predictive Value")
+metric_values <- c(accuracy, precision, recall, f1_score,neg_pred)
+metrics_df <- data.frame(Metric = metric_names,Value = metric_values)
+rownames(metrics_df) <- NULL
+
+ridge_eval <- kable(metrics_df, format = "html") %>%
+  kable_styling(full_width = FALSE,
+                latex_options = "striped", # Add lines for rows and columns
+                bootstrap_options = c("striped", "hover", "condensed", "responsive"), # Bootstrap styling options
+                font_size = 14) %>%
+  add_footnote("Positive Class-0 (Negative Review)",notation="none")
+
+ridge_eval
+
+```
+
+The ridge regression model utilizing trigrams demonstrated markedly superior performance metrics compared to various other classification methods, including Naive Bayes classifiers applied to unigrams, bigrams, and trigrams, as well as Lasso regression models using trigrams. Achieving an accuracy of 80.5%, this model exhibits a robust ability to correctly classify movie reviews as either negative or positive. The precision score of 77.20% indicates that a substantial proportion of reviews predicted as negative were correctly identified, while the recall score of 85.12% highlights the model's effectiveness in capturing the majority of actual negative reviews. The F1 score of 80.9% reflects a balanced trade-off between precision and recall, illustrating the model's proficiency in maintaining a low rate of both false positives and false negatives. Additionally, the negative predictive value of 84.32% signifies that a high percentage of reviews predicted as positive were accurately classified.
+
+In contrast, the basic Naive Bayes classifier using unigrams showed slightly lower performance, with an accuracy of 79.5%. Although its precision was comparable at 78.39%, the recall of 80% resulted in a lower F1 score of 79.19%. This performance gap suggests that the ridge regression model, by leveraging trigrams and incorporating regularization, captures more intricate linguistic patterns, thus providing a more nuanced and accurate sentiment classification compared to the simpler unigram-based approach.
+
+&nbsp;
+
+#### __Conclusion__  
+This project evaluated sentiment analysis techniques for classifying movie reviews by progressing from a Naive Bayes classifier using unigrams to a ridge regression model with trigrams. The ridge regression model demonstrated superior performance, achieving an accuracy of 80.5%, a precision of 77.20%, and a recall of 85.12%. These metrics highlight the model’s enhanced ability to accurately classify negative reviews and reduce misclassifications. The use of trigrams and regularization proved effective in capturing contextual nuances and improving classification accuracy. 
+
+This improved performance is crucial for applications such as movie recommendation systems and audience sentiment analysis. The model’s ability to accurately classify reviews enhances its utility in predicting box office performance and refining marketing strategies. Future work could extend these techniques to handle larger datasets, incorporate more complex models like transformers, and adapt the approach to other languages or domains to further refine sentiment analysis capabilities.  
+
+&nbsp;
+
+#### __Appendix: Code__
+
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE} 
+# this chunk generates the complete code appendix. 
+# eval=FALSE tells R not to run (``evaluate'') the code here (it was already run before).
+
+```
